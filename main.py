@@ -1,15 +1,21 @@
 import os
+import sys
+print(f"Python version: {sys.version}")
+
 import cv2
 import torch
 import torch.nn as nn
 import numpy as np
-import mediapipe as mp
 from fastapi import FastAPI, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import uvicorn
 import warnings
 warnings.filterwarnings('ignore')
+
+# Import MediaPipe secara eksplisit
+from mediapipe.python.solutions import face_detection as mp_face_detection
+from mediapipe.python.solutions import face_mesh as mp_face_mesh
 
 app = FastAPI()
 app.add_middleware(
@@ -21,9 +27,9 @@ app.add_middleware(
 )
 
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+print(f"Device: {DEVICE}")
 
-mp_face_detection = mp.solutions.face_detection
-mp_face_mesh = mp.solutions.face_mesh
+# Inisialisasi MediaPipe
 face_detection = mp_face_detection.FaceDetection(min_detection_confidence=0.5)
 face_mesh = mp_face_mesh.FaceMesh(
     static_image_mode=True,
@@ -54,8 +60,11 @@ if os.path.exists(model_path):
         model.load_state_dict(torch.load(model_path, map_location=DEVICE))
         model.to(DEVICE)
         model.eval()
-    except Exception:
-        pass
+        print("Model loaded successfully")
+    except Exception as e:
+        print(f"Failed to load model: {e}")
+else:
+    print(f"Model file not found at {model_path}")
 
 def extract_landmarks_and_crop(image):
     h, w = image.shape[:2]
@@ -94,8 +103,7 @@ def extract_landmarks_and_crop(image):
     if features.std() > 1e-6:
         features = (features - features.mean()) / (features.std() + 1e-6)
 
-    final_crop = cv2.resize(cropped, (224, 224))
-    return features.tolist(), final_crop, (x, y, box_w, box_h), True
+    return features.tolist(), cropped, (x, y, box_w, box_h), True
 
 @app.get("/")
 async def root():
@@ -137,8 +145,10 @@ async def predict(file: UploadFile = File(...)):
             "face_detected": True
         }
     except Exception as e:
+        print(f"Prediction error: {e}")
         return JSONResponse(status_code=500, content={"success": False, "error": str(e), "stroke": False})
 
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 8000))
+    print(f"Starting server on port {port}")
     uvicorn.run(app, host="0.0.0.0", port=port)
