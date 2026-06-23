@@ -1,3 +1,5 @@
+setuptools==68.0.0
+wheel==0.41.0
 fastapi==0.104.1
 uvicorn[standard]==0.24.0
 opencv-python-headless==4.8.1.78
